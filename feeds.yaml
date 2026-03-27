@@ -1,0 +1,10 @@
+# Job sources (no API keys). Lever slug: jobs.lever.co/<slug>
+# Greenhouse token: boards.greenhouse.io/<token>
+
+rss: []
+# Add RSS URLs here, e.g. some boards expose feeds (Indeed may block cloud IPs).
+
+greenhouse_boards:
+  - mozilla
+
+lever: []
