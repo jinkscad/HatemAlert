@@ -212,14 +212,26 @@ def collect_jobs(cfg: dict[str, Any]) -> list[Job]:
     return jobs
 
 
-def send_email(to_addr: str, from_addr: str, subject: str, html: str, smtp_user: str, smtp_pass: str) -> None:
+def parse_recipients(raw: str) -> list[str]:
+    """Comma- or semicolon-separated To addresses."""
+    out: list[str] = []
+    for part in re.split(r"[,;]", raw):
+        a = part.strip()
+        if a:
+            out.append(a)
+    return out
+
+
+def send_email(to_addrs: list[str], from_addr: str, subject: str, html: str, smtp_user: str, smtp_pass: str) -> None:
+    if not to_addrs:
+        raise ValueError("send_email: no recipients")
     host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     port = int(os.environ.get("SMTP_PORT", "587"))
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = from_addr
-    msg["To"] = to_addr
+    msg["To"] = ", ".join(to_addrs)
     msg.attach(MIMEText(html, "html", "utf-8"))
 
     ctx = ssl.create_default_context()
@@ -227,7 +239,7 @@ def send_email(to_addr: str, from_addr: str, subject: str, html: str, smtp_user:
         with smtplib.SMTP(host, port, timeout=30) as s:
             s.starttls(context=ctx)
             s.login(smtp_user, smtp_pass)
-            s.sendmail(from_addr, [to_addr], msg.as_string())
+            s.sendmail(from_addr, to_addrs, msg.as_string())
     except smtplib.SMTPAuthenticationError as e:
         raise SystemExit(
             "SMTP login failed. Use a Gmail App Password for SMTP_PASSWORD (not your normal password), "
@@ -237,13 +249,13 @@ def send_email(to_addr: str, from_addr: str, subject: str, html: str, smtp_user:
 
 
 def main() -> None:
-    to_addr = os.environ.get("ALERT_EMAIL_TO", "").strip()
+    to_addrs = parse_recipients(os.environ.get("ALERT_EMAIL_TO", ""))
     from_addr = os.environ.get("ALERT_EMAIL_FROM", "").strip()
     smtp_user = os.environ.get("SMTP_USER", "").strip()
     smtp_pass = os.environ.get("SMTP_PASSWORD", "").strip()
 
     missing = []
-    if not to_addr:
+    if not to_addrs:
         missing.append("ALERT_EMAIL_TO")
     if not from_addr:
         missing.append("ALERT_EMAIL_FROM")
@@ -301,14 +313,14 @@ def main() -> None:
 <ul>{"".join(lines)}</ul>
 </body></html>"""
     send_email(
-        to_addr,
+        to_addrs,
         from_addr,
         subject=f"[HatemAlert] {len(new_jobs)} new Canada intern listing(s)",
         html=body_html,
         smtp_user=smtp_user,
         smtp_pass=smtp_pass,
     )
-    print(f"Emailed {len(new_jobs)} new listing(s) to {to_addr}.")
+    print(f"Emailed {len(new_jobs)} new listing(s) to {', '.join(to_addrs)}.")
 
 
 if __name__ == "__main__":

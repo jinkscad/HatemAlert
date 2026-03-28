@@ -41,7 +41,8 @@ jobs:
 
       - name: Run notifier
         env:
-          ALERT_EMAIL_TO: haalmasr@ualberta.ca
+          # Comma-separated; all get the same alert email
+          ALERT_EMAIL_TO: haalmasr@ualberta.ca,arnogl.fosh@gmail.com
           ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
