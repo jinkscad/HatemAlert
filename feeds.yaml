@@ -1,10 +1,37 @@
-# Job sources (no API keys). Lever slug: jobs.lever.co/<slug>
-# Greenhouse token: boards.greenhouse.io/<token>
+# Job sources (no API keys). Add tokens from career URLs:
+#   https://boards.greenhouse.io/<token>  -> greenhouse_boards: <token>
+#   https://jobs.lever.co/<slug>/...       -> lever: <slug>
+#
+# More boards = longer GitHub Actions runs; trim this list if needed.
 
 rss: []
-# Add RSS URLs here, e.g. some boards expose feeds (Indeed may block cloud IPs).
 
 greenhouse_boards:
+  # Canada / strong Canadian offices
   - mozilla
+  - d2l
+  - hootsuite
+  - touchbistro
+  # Global tech (often post Canada / remote-CA roles; filter still applies)
+  - stripe
+  - figma
+  - dropbox
+  - reddit
+  - duolingo
+  - databricks
+  - intercom
+  - mongodb
+  - vercel
+  - airbnb
+  - coinbase
+  - roblox
+  - brex
+  - robinhood
+  - twilio
+  - hubspot
+  - elastic
 
-lever: []
+lever:
+  # Verified JSON API; Canadian HQs / Canada hiring
+  - achievers
+  - alimentiv-2
