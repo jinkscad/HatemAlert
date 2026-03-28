@@ -223,10 +223,17 @@ def send_email(to_addr: str, from_addr: str, subject: str, html: str, smtp_user:
     msg.attach(MIMEText(html, "html", "utf-8"))
 
     ctx = ssl.create_default_context()
-    with smtplib.SMTP(host, port, timeout=30) as s:
-        s.starttls(context=ctx)
-        s.login(smtp_user, smtp_pass)
-        s.sendmail(from_addr, [to_addr], msg.as_string())
+    try:
+        with smtplib.SMTP(host, port, timeout=30) as s:
+            s.starttls(context=ctx)
+            s.login(smtp_user, smtp_pass)
+            s.sendmail(from_addr, [to_addr], msg.as_string())
+    except smtplib.SMTPAuthenticationError as e:
+        raise SystemExit(
+            "SMTP login failed. Use a Gmail App Password for SMTP_PASSWORD (not your normal password), "
+            "and set SMTP_USER + ALERT_EMAIL_FROM to that same Gmail address. "
+            f"Underlying error: {e!s}"
+        ) from e
 
 
 def main() -> None:
@@ -235,10 +242,21 @@ def main() -> None:
     smtp_user = os.environ.get("SMTP_USER", "").strip()
     smtp_pass = os.environ.get("SMTP_PASSWORD", "").strip()
 
-    if not (to_addr and from_addr and smtp_user and smtp_pass):
+    missing = []
+    if not to_addr:
+        missing.append("ALERT_EMAIL_TO")
+    if not from_addr:
+        missing.append("ALERT_EMAIL_FROM")
+    if not smtp_user:
+        missing.append("SMTP_USER")
+    if not smtp_pass:
+        missing.append("SMTP_PASSWORD")
+    if missing:
         raise SystemExit(
-            "Set ALERT_EMAIL_TO, ALERT_EMAIL_FROM, SMTP_USER, SMTP_PASSWORD "
-            "(GitHub Actions: repository secrets)."
+            "Missing environment variables: "
+            + ", ".join(missing)
+            + ". Add them under Settings → Secrets and variables → Actions "
+            "(repository secrets; names must match exactly)."
         )
 
     cfg = load_config()
