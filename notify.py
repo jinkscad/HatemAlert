@@ -271,6 +271,23 @@ def main() -> None:
             "(repository secrets; names must match exactly)."
         )
 
+    st = os.environ.get("SELF_TEST_EMAIL", "").strip().lower()
+    if st in ("1", "true", "yes"):
+        send_email(
+            to_addrs,
+            from_addr,
+            subject="[HatemAlert] SMTP test",
+            html=(
+                "<html><body><p>If you see this, GitHub Actions can send mail.</p>"
+                "<p>Internship alerts only go out when <strong>new</strong> matching jobs appear "
+                "after listings are tracked (not on every run).</p></body></html>"
+            ),
+            smtp_user=smtp_user,
+            smtp_pass=smtp_pass,
+        )
+        print(f"Self-test email sent to {', '.join(to_addrs)}.")
+        return
+
     cfg = load_config()
     all_jobs = collect_jobs(cfg)
     filtered = [
@@ -286,7 +303,24 @@ def main() -> None:
         for j in filtered:
             seen.add(j.job_id)
         save_seen(seen)
-        print(f"Bootstrap: tracked {len(filtered)} Canada intern+CS listings, no email sent.")
+        n = len(filtered)
+        print(f"Bootstrap: tracked {n} Canada intern+CS listings.")
+        summary = f"""\
+<html><body>
+<p><strong>HatemAlert</strong> — first scan finished (bootstrap).</p>
+<p>We are now tracking <strong>{n}</strong> Canada CS intern/co-op listing(s) that match your filters right now.</p>
+<p>You will <strong>not</strong> get a full list of those in email (no inbox spam). Next messages are only when <strong>new</strong> matching jobs appear.</p>
+<p>To verify delivery anytime, run the <strong>SMTP test</strong> workflow in GitHub Actions.</p>
+</body></html>"""
+        send_email(
+            to_addrs,
+            from_addr,
+            subject=f"[HatemAlert] First scan complete — tracking {n} listing(s)",
+            html=summary,
+            smtp_user=smtp_user,
+            smtp_pass=smtp_pass,
+        )
+        print(f"Bootstrap summary email sent to {', '.join(to_addrs)}.")
         return
 
     if not new_jobs:

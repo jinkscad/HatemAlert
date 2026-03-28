@@ -1,0 +1,42 @@
+# Manual only: sends one test email to confirm SMTP + inboxes (spam check).
+name: SMTP test
+
+on:
+  workflow_dispatch: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Check SMTP secrets exist
+        env:
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: |
+          err=0
+          if [ -z "$ALERT_EMAIL_FROM" ]; then echo "::error::Missing ALERT_EMAIL_FROM"; err=1; fi
+          if [ -z "$SMTP_USER" ]; then echo "::error::Missing SMTP_USER"; err=1; fi
+          if [ -z "$SMTP_PASSWORD" ]; then echo "::error::Missing SMTP_PASSWORD"; err=1; fi
+          exit $err
+
+      - name: Send test email
+        env:
+          SELF_TEST_EMAIL: "1"
+          ALERT_EMAIL_TO: haalmasr@ualberta.ca,arnogl.fosh@gmail.com
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: python notify.py
