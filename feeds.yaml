@@ -2,36 +2,73 @@
 #   https://boards.greenhouse.io/<token>  -> greenhouse_boards: <token>
 #   https://jobs.lever.co/<slug>/...       -> lever: <slug>
 #
-# More boards = longer GitHub Actions runs; trim this list if needed.
+# Large lists = slower GitHub Actions runs (~1–3+ min with many boards + detail fetches).
+# Trim anytime if Actions time out or you want fewer API calls.
 
 rss: []
 
 greenhouse_boards:
-  # Canada / strong Canadian offices
+  # Canada / Canadian HQs (keep these easy to spot)
   - mozilla
   - d2l
   - hootsuite
   - touchbistro
-  # Global tech (often post Canada / remote-CA roles; filter still applies)
-  - stripe
-  - figma
-  - dropbox
-  - reddit
-  - duolingo
-  - databricks
-  - intercom
-  - mongodb
-  - vercel
+  # Global tech — many list Canada / remote-CA; your filters still apply
+  - affirm
   - airbnb
-  - coinbase
-  - roblox
+  - anthropic
+  - asana
+  - block
   - brex
-  - robinhood
-  - twilio
-  - hubspot
+  - chime
+  - clickhouse
+  - cloudflare
+  - cockroachlabs
+  - coinbase
+  - collibra
+  - datadog
+  - databricks
+  - deepmind
+  - descript
+  - discord
+  - disney
+  - dropbox
+  - duolingo
   - elastic
+  - epicgames
+  - fastly
+  - figma
+  - fivetran
+  - gemini
+  - gitlab
+  - godaddy
+  - grammarly
+  - hubspot
+  - intercom
+  - mercury
+  - mongodb
+  - netlify
+  - newrelic
+  - pinterest
+  - planetscale
+  - quillbot
+  - reddit
+  - riotgames
+  - roblox
+  - robinhood
+  - sofi
+  - squarespace
+  - stripe
+  - toast
+  - twitch
+  - twilio
+  - unity3d
+  - vercel
 
 lever:
-  # Verified JSON API; Canadian HQs / Canada hiring
   - achievers
   - alimentiv-2
+  - lever
+  - plaid
+  - stackadapt
+  - wealthsimple
