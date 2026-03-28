@@ -28,7 +28,7 @@ def main() -> None:
     print(f"Total job postings fetched (all titles): {len(all_jobs)}")
 
     filtered = [
-        j for j in all_jobs if matches_intern_cs(j.title) and is_canada_location(j.location_text)
+        j for j in all_jobs if matches_intern_cs(j.filter_text) and is_canada_location(j.filter_text)
     ]
     print(f"After intern/co-op + CS + Canada filter: {len(filtered)}")
     print()

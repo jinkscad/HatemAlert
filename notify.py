@@ -30,9 +30,17 @@ CONFIG_PATH = ROOT / "feeds.yaml"
 
 INTERN_RE = re.compile(
     r"\b(intern(ship)?|co-?op|placement|student\s+(role|job)|"
-    r"undergraduate\s+intern)\b",
+    r"undergraduate\s+intern|apprentice|summer\s+student|winter\s+student)\b",
     re.IGNORECASE,
 )
+# Greenhouse list API has no job description — fetch detail when title looks like a seasonal / student role.
+SEASON_OR_TERM_HINT = re.compile(
+    r"\b(summer|winter|fall|spring)\s+20\d{2}\b|\b20\d{2}\s+(intern|co-?op)\b|"
+    r"\buniversity\s+recruiting\b|\bstudent\s+position\b",
+    re.IGNORECASE,
+)
+# Max extra Greenhouse API calls per board (full job JSON includes HTML description).
+GH_JOB_DETAIL_CAP = 20
 CS_RE = re.compile(
     r"\b(software|swe|developer|engineer|backend|frontend|full[\s-]?stack|"
     r"computer\s+science|cs\b|machine\s+learning|ml\b|data\s+engineer|"
@@ -71,6 +79,7 @@ class Job:
     url: str
     source: str
     location_text: str
+    filter_text: str
 
 
 def stable_id(url: str, title: str) -> str:
@@ -104,8 +113,8 @@ def normalize_location_blob(*parts: str) -> str:
     return re.sub(r"\s+", " ", strip_html(" ".join(p for p in parts if p))).strip()
 
 
-def matches_intern_cs(title: str) -> bool:
-    t = title or ""
+def matches_intern_cs(text: str) -> bool:
+    t = text or ""
     if not INTERN_RE.search(t):
         return False
     return bool(CS_RE.search(t))
@@ -134,9 +143,25 @@ def fetch_rss(url: str) -> list[Job]:
             continue
         jid = stable_id(link, title)
         host = urlparse(url).netloc or "rss"
-        loc = normalize_location_blob(title, summary)
-        out.append(Job(job_id=jid, title=title, url=link, source=f"rss:{host}", location_text=loc))
+        blob = normalize_location_blob(title, summary)
+        out.append(
+            Job(
+                job_id=jid,
+                title=title,
+                url=link,
+                source=f"rss:{host}",
+                location_text=blob,
+                filter_text=blob,
+            )
+        )
     return out
+
+
+def _greenhouse_job_detail(board_token: str, job_id: int) -> dict[str, Any]:
+    url = f"https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs/{job_id}"
+    r = requests.get(url, timeout=20, headers={"User-Agent": "HatemAlert/1.0"})
+    r.raise_for_status()
+    return r.json()
 
 
 def fetch_greenhouse(board_token: str) -> list[Job]:
@@ -145,6 +170,7 @@ def fetch_greenhouse(board_token: str) -> list[Job]:
     r.raise_for_status()
     data = r.json()
     out: list[Job] = []
+    detail_budget = GH_JOB_DETAIL_CAP
     for j in data.get("jobs") or []:
         title = (j.get("title") or "").strip()
         link = (j.get("absolute_url") or "").strip()
@@ -157,9 +183,41 @@ def fetch_greenhouse(board_token: str) -> list[Job]:
             loc_name = (loc_obj.get("name") or "").strip()
         elif isinstance(loc_obj, str):
             loc_name = loc_obj.strip()
-        loc = normalize_location_blob(loc_name, title)
+        location_text = normalize_location_blob(loc_name, title)
+        loc_blob = location_text
+        intern_in_title = bool(INTERN_RE.search(title))
+        cs_in_title = bool(CS_RE.search(title))
+        canada_from_list = is_canada_location(loc_blob)
+        content_plain = ""
+        need_detail = False
+        if detail_budget > 0 and cs_in_title:
+            if intern_in_title and not canada_from_list:
+                need_detail = True
+            elif (
+                not intern_in_title
+                and canada_from_list
+                and SEASON_OR_TERM_HINT.search(title + " " + loc_name)
+            ):
+                need_detail = True
+        if need_detail:
+            raw_id = j.get("id")
+            if raw_id is not None:
+                try:
+                    d = _greenhouse_job_detail(board_token, int(raw_id))
+                    content_plain = strip_html((d.get("content") or "")[:25000])
+                    detail_budget -= 1
+                except Exception:
+                    pass
+        filter_text = normalize_location_blob(title, loc_name, content_plain)
         out.append(
-            Job(job_id=jid, title=title, url=link, source=f"greenhouse:{board_token}", location_text=loc)
+            Job(
+                job_id=jid,
+                title=title,
+                url=link,
+                source=f"greenhouse:{board_token}",
+                location_text=location_text,
+                filter_text=filter_text,
+            )
         )
     return out
 
@@ -186,8 +244,17 @@ def fetch_lever(company: str) -> list[Job]:
             commitment = (cats.get("commitment") or "") or ""
             loc_part = normalize_location_blob(str(raw_loc), str(wt), str(commitment))
         desc = (p.get("description") or "")[:4000]
-        loc = normalize_location_blob(loc_part, title, strip_html(desc))
-        out.append(Job(job_id=jid, title=title, url=host, source=f"lever:{company}", location_text=loc))
+        blob = normalize_location_blob(loc_part, title, strip_html(desc))
+        out.append(
+            Job(
+                job_id=jid,
+                title=title,
+                url=host,
+                source=f"lever:{company}",
+                location_text=blob,
+                filter_text=blob,
+            )
+        )
     return out
 
 
@@ -291,7 +358,7 @@ def main() -> None:
     cfg = load_config()
     all_jobs = collect_jobs(cfg)
     filtered = [
-        j for j in all_jobs if matches_intern_cs(j.title) and is_canada_location(j.location_text)
+        j for j in all_jobs if matches_intern_cs(j.filter_text) and is_canada_location(j.filter_text)
     ]
 
     seen = load_seen()
