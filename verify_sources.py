@@ -9,10 +9,11 @@ No email, no changes to state/seen.json. Run from repo root:
 from __future__ import annotations
 
 from notify import (
+    CS_RE,
     collect_jobs,
     is_canada_location,
+    is_intern_role,
     load_config,
-    matches_intern_cs,
 )
 
 
@@ -28,7 +29,11 @@ def main() -> None:
     print(f"Total job postings fetched (all titles): {len(all_jobs)}")
 
     filtered = [
-        j for j in all_jobs if matches_intern_cs(j.filter_text) and is_canada_location(j.filter_text)
+        j
+        for j in all_jobs
+        if is_intern_role(j.title, j.filter_text)
+        and CS_RE.search(j.filter_text or "")
+        and is_canada_location(j.filter_text)
     ]
     print(f"After intern/co-op + CS + Canada filter: {len(filtered)}")
     print()

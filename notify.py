@@ -33,14 +33,18 @@ INTERN_RE = re.compile(
     r"undergraduate\s+intern|apprentice|summer\s+student|winter\s+student)\b",
     re.IGNORECASE,
 )
-# Greenhouse list API has no job description — fetch detail when title looks like a seasonal / student role.
-SEASON_OR_TERM_HINT = re.compile(
-    r"\b(summer|winter|fall|spring)\s+20\d{2}\b|\b20\d{2}\s+(intern|co-?op)\b|"
-    r"\buniversity\s+recruiting\b|\bstudent\s+position\b",
+NOT_INTERNSHIP_RE = re.compile(
+    r"\b(no|not|isn['’]?t|aren['’]?t)\s+(an?\s+)?intern(ship)?s?\b|"
+    r"\bnot\s+accepting\s+intern(ship)?\s+applications\b|"
+    r"\bthis\s+is\s+not\s+an?\s+intern(ship)?\b",
     re.IGNORECASE,
 )
-# Max extra Greenhouse API calls per board (full job JSON includes HTML description).
-GH_JOB_DETAIL_CAP = 20
+# Greenhouse list API has no job description. We fetch detail JSON to improve recall.
+# Scope can be changed via env:
+#   GH_DETAIL_SCOPE=canadaish (default), all, or none
+# Cap per board can be changed via GH_JOB_DETAIL_CAP (default 40).
+GH_DETAIL_SCOPE_DEFAULT = "canadaish"
+GH_JOB_DETAIL_CAP_DEFAULT = 40
 CS_RE = re.compile(
     r"\b(software|swe|developer|engineer|backend|frontend|full[\s-]?stack|"
     r"computer\s+science|cs\b|machine\s+learning|ml\b|data\s+engineer|"
@@ -120,6 +124,18 @@ def matches_intern_cs(text: str) -> bool:
     return bool(CS_RE.search(t))
 
 
+def is_intern_role(title: str, text: str) -> bool:
+    """Use full text for recall, but weight title first to reduce false positives."""
+    title_loc = normalize_location_blob(title)
+    if INTERN_RE.search(title_loc):
+        return True
+    # Look near the top of content where role type is usually stated.
+    window = normalize_location_blob((text or "")[:2200])
+    if NOT_INTERNSHIP_RE.search(window):
+        return False
+    return bool(INTERN_RE.search(window))
+
+
 def is_canada_location(location_blob: str) -> bool:
     t = normalize_location_blob(location_blob)
     if not t:
@@ -170,7 +186,14 @@ def fetch_greenhouse(board_token: str) -> list[Job]:
     r.raise_for_status()
     data = r.json()
     out: list[Job] = []
-    detail_budget = GH_JOB_DETAIL_CAP
+    detail_scope = os.environ.get("GH_DETAIL_SCOPE", GH_DETAIL_SCOPE_DEFAULT).strip().lower()
+    if detail_scope not in {"canadaish", "all", "none"}:
+        detail_scope = GH_DETAIL_SCOPE_DEFAULT
+    try:
+        detail_budget = int(os.environ.get("GH_JOB_DETAIL_CAP", str(GH_JOB_DETAIL_CAP_DEFAULT)))
+    except ValueError:
+        detail_budget = GH_JOB_DETAIL_CAP_DEFAULT
+    detail_budget = max(0, detail_budget)
     for j in data.get("jobs") or []:
         title = (j.get("title") or "").strip()
         link = (j.get("absolute_url") or "").strip()
@@ -185,20 +208,14 @@ def fetch_greenhouse(board_token: str) -> list[Job]:
             loc_name = loc_obj.strip()
         location_text = normalize_location_blob(loc_name, title)
         loc_blob = location_text
-        intern_in_title = bool(INTERN_RE.search(title))
-        cs_in_title = bool(CS_RE.search(title))
         canada_from_list = is_canada_location(loc_blob)
         content_plain = ""
         need_detail = False
-        if detail_budget > 0 and cs_in_title:
-            if intern_in_title and not canada_from_list:
+        if detail_budget > 0:
+            if detail_scope == "all":
                 need_detail = True
-            elif (
-                not intern_in_title
-                and canada_from_list
-                and SEASON_OR_TERM_HINT.search(title + " " + loc_name)
-            ):
-                need_detail = True
+            elif detail_scope == "canadaish":
+                need_detail = canada_from_list
         if need_detail:
             raw_id = j.get("id")
             if raw_id is not None:
@@ -358,7 +375,11 @@ def main() -> None:
     cfg = load_config()
     all_jobs = collect_jobs(cfg)
     filtered = [
-        j for j in all_jobs if matches_intern_cs(j.filter_text) and is_canada_location(j.filter_text)
+        j
+        for j in all_jobs
+        if is_intern_role(j.title, j.filter_text)
+        and CS_RE.search(j.filter_text or "")
+        and is_canada_location(j.filter_text)
     ]
 
     seen = load_seen()
